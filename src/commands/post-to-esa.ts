@@ -8,6 +8,77 @@ import {
 	formatFileSizeKb,
 } from '../utils/attachment-resolver';
 
+/**
+ * Count unique article wikilinks in body text.
+ * Matches [[...]] that are NOT preceded by ! (attachment embeds).
+ */
+function countWikilinks(body: string): number {
+	const linkRegex = /(?<!!)\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g;
+	const queries = new Set<string>();
+	let match: RegExpExecArray | null;
+	while ((match = linkRegex.exec(body)) !== null) {
+		const displayText = match[2] || match[1]!;
+		queries.add(displayText);
+	}
+	return queries.size;
+}
+
+/**
+ * Resolve article wikilinks ([[id|title]] or [[title]]) by searching esa.io.
+ * - If found: replace with [#number: full_name](/posts/number)
+ * - If not found: replace with plain display text
+ */
+async function resolveWikilinks(
+	body: string,
+	esaClient: EsaClient,
+): Promise<string> {
+	const linkRegex = /(?<!!)\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g;
+
+	// Collect unique links by display text (search query)
+	const linkMap = new Map<string, { refs: string[]; displayText: string }>();
+	let match: RegExpExecArray | null;
+	while ((match = linkRegex.exec(body)) !== null) {
+		const fullMatch = match[0];
+		const linkTarget = match[1]!;
+		const displayText = match[2] || linkTarget;
+
+		if (!linkMap.has(displayText)) {
+			linkMap.set(displayText, { refs: [], displayText });
+		}
+		linkMap.get(displayText)!.refs.push(fullMatch);
+	}
+
+	if (linkMap.size === 0) return body;
+
+	let result = body;
+
+	for (const [query, info] of linkMap) {
+		try {
+			const searchResult = await esaClient.searchPosts(query);
+			const found = searchResult.posts.find((p) => p.name === query);
+
+			if (found) {
+				const replacement = `[#${found.number}: ${found.name}](/posts/${found.number})`;
+				for (const ref of info.refs) {
+					result = result.replace(ref, replacement);
+				}
+			} else {
+				// Not found → plain text
+				for (const ref of info.refs) {
+					result = result.replace(ref, info.displayText);
+				}
+			}
+		} catch {
+			// On error, fall back to plain text
+			for (const ref of info.refs) {
+				result = result.replace(ref, info.displayText);
+			}
+		}
+	}
+
+	return result;
+}
+
 export function registerPostToEsa(plugin: ObsidianToEsa) {
 	plugin.addCommand({
 		id: 'post-to-esa',
@@ -91,10 +162,11 @@ async function postNote(
 	}
 
 	// --- Step 2: Rate limit check ---
+	const wikilinkCount = countWikilinks(body);
 	const rateLimit = esaClient.lastRateLimit;
 	if (rateLimit && rateLimit.limit > 0) {
 		// Only policies calls consume esa.io API rate limit (S3 upload is direct)
-		const estimatedRequests = 1 + 1 + attachments.length; // search + post + N policies
+		const estimatedRequests = 1 + 1 + attachments.length + wikilinkCount; // search + post + N policies + M wikilink searches
 		const buffer = 3;
 		const needed = estimatedRequests + buffer;
 		if (rateLimit.remaining < needed) {
@@ -141,6 +213,16 @@ async function postNote(
 			new Notice(
 				`Failed to upload ${att.file.name}: ${message}`,
 			);
+		}
+	}
+
+	// --- Step 3.5: Resolve article wikilinks ---
+	if (wikilinkCount > 0) {
+		try {
+			finalBody = await resolveWikilinks(finalBody, esaClient);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			new Notice(`Wikilink resolution error: ${message}`);
 		}
 	}
 
