@@ -186,6 +186,8 @@ async function postNote(
 	let uploadCount = 0;
 	const totalAttachments = attachments.length;
 
+	const progressNotice = new Notice(`Uploading: 0/${totalAttachments}`, 0);
+
 	for (let i = 0; i < totalAttachments; i++) {
 		const att = attachments[i]!;
 		try {
@@ -206,7 +208,7 @@ async function postNote(
 			);
 			finalBody = finalBody.replace(att.originalRef, htmlTag);
 			uploadCount++;
-			new Notice(`Uploading attachments: ${uploadCount}/${totalAttachments}`);
+			progressNotice.messageEl.setText(`Uploading: ${uploadCount}/${totalAttachments}`);
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : String(err);
@@ -214,6 +216,10 @@ async function postNote(
 				`Failed to upload ${att.file.name}: ${message}`,
 			);
 		}
+	}
+
+	if (uploadCount === totalAttachments) {
+		progressNotice.hide();
 	}
 
 	// --- Step 3.5: Resolve article wikilinks ---

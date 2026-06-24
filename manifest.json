@@ -2,7 +2,7 @@
 	"id": "obsidian-to-esa",
 	"name": "Obsidian to esa.io",
 	"version": "1.0.0",
-	"minAppVersion": "1.0.0",
+	"minAppVersion": "1.8.7",
 	"description": "Post Obsidian notes to esa.io.",
 	"author": "misumisumi",
 	"authorUrl": "https://github.com/misumisumi",
