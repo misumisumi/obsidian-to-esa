@@ -2,9 +2,26 @@
 
 ## Project overview
 
-- Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
-- Entry point: `src/main.ts` compiled to `main.js` and loaded by Obsidian.
-- Required release artifacts: `main.js`, `manifest.json`, and optional `styles.css`.
+- obsidianの記事をesa.ioにアップロードするプラグインの作成
+- esa.ioのAPIの仕様はhttps://docs.esa.io/posts/102を参照
+- 画像や動画、PDF等の添付ファイルのアップロードは以下のURLを参照
+    - https://aik0aaat.hatenadiary.jp/entry/2021/12/27/222059
+    - https://qiita.com/yh1224/items/628050794aedbc644422
+- APIやアップロードの仕方は簡易的なアップロードスクリプトを参照
+    - ./upload.sh
+- 参照の適切な対処
+    - obsidianのファイル参照形式は[[.*]]であり、これは添付ファイルと記事へのリンクの二つの意味がある。
+    - 記事へのリンクの場合、esaから該当の記事があるか確認して存在すれば参照、無ければプレーンテキストにする
+- esaのタイトルはobsidianのtitle propatyから取得
+- obsidianのpropaty (---で囲まれた部分)はアップロードしない
+- アップロード前に想定されるリクエスト数を算出し、残りのリクエスト数が小さければ警告しアップロードしない
+    - 回復時間も通知する
+    - アップロード可能な場合、進捗状況を通知(<アップロード完了>/<アップロード数>)
+- esaの記事を検索し、アップロード予定のファイルと同じ記事があれば、そのポストナンバーで編集(override)する
+    - 無ければ新規にアップデート
+- 設定には次の項目を入れる
+    - ACCESS_TOKEN
+- obsidianで現在開いているファイルがアップロード対象とする
 
 ## Environment & tooling
 
